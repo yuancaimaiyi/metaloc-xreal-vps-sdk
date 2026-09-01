@@ -58,7 +58,25 @@ XREAL SDK 需要从 XREAL 开发者中心单独获取，不在 Unity 官方 Pack
 2. 按 XREAL 官方文档安装插件
 3. 安装完成后，进入 **Edit → Project Settings → XR Plug-in Management → Android** 标签页，勾选 **XREAL**
 
-### 1d. 安装 Metaloc VPS SDK
+### 1d. 申请并配置 XREAL Enterprise License
+
+> **灰度相机是 XREAL Enterprise API**，必须有绑定您应用包名的 License 文件才能正常工作。没有 License，相机初始化会静默失败，导致永远无法定位。
+
+**申请步骤：**
+
+1. 在 [XREAL 开发者中心](https://developer.xreal.com) 注册账号，申请 Enterprise 开发者权限
+2. 创建应用，填写您的应用包名（即 Unity Player Settings 中的 **Package Name**，例如 `com.yourcompany.yourapp`）
+3. 下载分配给该应用的 License 文件（通常是一个加密的 `.txt` 文件）
+
+**配置步骤：**
+
+1. 将下载的 License 文件放入 Unity 工程的 `Assets/XR/Settings/` 目录下
+2. 打开 **Edit → Project Settings → XR Plug-in Management → XREAL** 设置页
+3. 找到 **License Asset** 字段，将 License 文件拖入该字段
+
+> **注意**：License 与包名绑定，换包名必须重新申请。不同开发者必须各自申请，不能共用同一个 License 文件。
+
+### 1e. 安装 Metaloc VPS SDK
 
 **方式 A：从 Git 地址安装（推荐）**
 
@@ -76,7 +94,7 @@ https://github.com/metaloc/xreal-vps-sdk.git
 2. Unity 中：**Window → Package Manager → "+" → Add package from disk**
 3. 找到解压后的文件夹，选择 `package.json`，点击 **Open**
 
-### 1e. 配置 AndroidManifest 权限
+### 1f. 配置 AndroidManifest 权限
 
 XREAL 灰度相机需要企业级权限，默认 AndroidManifest 不包含，需手动添加：
 
@@ -462,6 +480,8 @@ m_ContentManager.ReloadScene();
 - [ ] Minimum API Level ≥ 26
 
 **权限与配置**
+- [ ] XREAL Enterprise License 文件已放入工程并绑定到 XR Plug-in Management → XREAL → License Asset
+- [ ] License 绑定的包名与 Player Settings → Package Name 完全一致
 - [ ] AndroidManifest.xml 包含 `com.xreal.permission.EYE_TRACKING` 权限
 - [ ] Auth Token 已填写（以 `Bearer ` 开头，注意有空格）
 - [ ] Map Name 与 Metaloc 服务端注册的地图 ID 完全一致
