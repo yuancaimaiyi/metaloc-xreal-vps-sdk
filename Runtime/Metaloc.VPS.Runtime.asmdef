@@ -1,0 +1,20 @@
+{
+  "name": "Metaloc.VPS.Runtime",
+  "rootNamespace": "Metaloc.VPS",
+  "references": [
+    "Unity.InputSystem",
+    "Unity.XR.Management",
+    "Unity.XR.ARSubsystems",
+    "Unity.XR.XREAL",
+    "Unity.XR.XREAL.Enterprise"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

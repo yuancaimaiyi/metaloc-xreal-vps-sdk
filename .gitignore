@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# JetBrains / VS Code
+.idea/
+.vscode/
+*.user
+*.suo
+
+# Unity auto-generated (do NOT ignore .meta — they must be committed with source files)
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+
+# Binary outputs that don't belong in the SDK repo
+*.apk
+*.aab
