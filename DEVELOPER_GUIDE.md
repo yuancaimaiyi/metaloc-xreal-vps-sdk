@@ -83,7 +83,7 @@ XREAL SDK 需要从 XREAL 开发者中心单独获取，不在 Unity 官方 Pack
 在 Unity 中打开 **Window → Package Manager**，点击左上角 **"+"**，选择 **Add package from git URL**，输入：
 
 ```
-https://github.com/metaloc/xreal-vps-sdk.git
+https://github.com/yuancaimaiyi/metaloc-xreal-vps-sdk.git
 ```
 
 安装完成后，Package Manager 列表中会出现 **Metaloc VPS SDK**。

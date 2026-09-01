@@ -11,7 +11,8 @@
     "url": "https://www.metaloc.cn"
   },
   "dependencies": {
-    "com.unity.xr.management": "4.3.3"
+    "com.unity.xr.management": "4.3.3",
+    "com.unity.inputsystem": "1.4.0"
   },
   "keywords": [
     "VPS",
