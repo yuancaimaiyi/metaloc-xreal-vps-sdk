@@ -4,7 +4,6 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.XR.Management;
 using UnityEngine.XR.ARSubsystems;
-using AOT;
 
 namespace Metaloc.VPS
 {
@@ -115,9 +114,6 @@ namespace Metaloc.VPS
 
         private UnityEngine.InputSystem.Gyroscope m_Gyroscope;
 
-        // Static back-pointer so the static Posidon callback can dispatch to the correct instance.
-        private static MetalocVPSManager s_instance;
-
         // ── Unity lifecycle ───────────────────────────────────────────────────
 
         private void Awake()
@@ -129,7 +125,6 @@ namespace Metaloc.VPS
                 return;
             }
             m_Config = Config;
-            s_instance = this;
         }
 
         private void Start()
@@ -324,6 +319,7 @@ namespace Metaloc.VPS
 
             // Candidate VPS→Unity matrix (may be overridden by Posidon)
             m_PrevVpsToUnityMatrix = m_VpsToUnityMatrix;
+            bool wasLocalized = m_IsLocalized;
             m_VpsToUnityMatrix =
                 Matrix4x4.TRS(m_VioSnapshotAtRequest.position, m_VioSnapshotAtRequest.rotation, Vector3.one)
                 * Matrix4x4.TRS(glassesInVps_LH.position, glassesInVps_LH.rotation, Vector3.one).inverse;
@@ -335,11 +331,13 @@ namespace Metaloc.VPS
                 m_VioSnapshotAtRequest.position, m_VioSnapshotAtRequest.rotation,
                 glassesInVps_LH.position, glassesInVps_LH.rotation);
 
-            // If Posidon rejected and we were already localized, roll back the candidate matrix
-            if (!m_LastInsertAccepted && m_IsLocalized)
+            // If Posidon rejected, restore the previous state so cold-start retry keeps running
+            if (!m_LastInsertAccepted)
             {
+                m_IsLocalized = wasLocalized;
                 m_VpsToUnityMatrix = m_PrevVpsToUnityMatrix;
-                Debug.LogWarning("[MetalocVPSManager] Posidon rejected → matrix rolled back");
+                Debug.LogWarning("[MetalocVPSManager] Posidon rejected → state rolled back");
+                OnLocalizationFailed?.Invoke("Posidon rejected measurement");
                 return;
             }
 

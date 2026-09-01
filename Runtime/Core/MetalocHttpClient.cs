@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -42,23 +43,27 @@ namespace Metaloc.VPS
 
         private string BuildVPSJson(VPSRequestInfo info)
         {
-            // Manual JSON assembly avoids a hard dependency on LitJson / Newtonsoft.
+            // Use InvariantCulture so float values always use '.' as decimal separator
+            // regardless of the device's regional settings.
+            var ic = CultureInfo.InvariantCulture;
+            string F(float v) => v.ToString("G", ic);
+
             return "{"
                 + $"\"mapName\":\"{m_Config.mapName}\","
                 + $"\"timestamp\":{info.timestamp},"
                 + $"\"equipmentInfo\":{{\"uuid\":\"{m_UUID}\"}},"
                 + $"\"deviceType\":{m_Config.deviceType},"
                 + $"\"mapOrientation\":{m_Config.mapOrientation},"
-                + $"\"focalLength\":{{\"x\":{info.focalLength.x},\"y\":{info.focalLength.y}}},"
+                + $"\"focalLength\":{{\"x\":{F(info.focalLength.x)},\"y\":{F(info.focalLength.y)}}},"
                 + $"\"resolution\":{{\"x\":{info.resolution.x},\"y\":{info.resolution.y}}},"
-                + $"\"principalPoint\":{{\"x\":{info.principalPoint.x},\"y\":{info.principalPoint.y}}},"
-                + $"\"unityPosition\":{{\"x\":{info.unityPosition.x},\"y\":{info.unityPosition.y},\"z\":{info.unityPosition.z}}},"
-                + $"\"unityRotation\":{{\"x\":{info.unityRotation.x},\"y\":{info.unityRotation.y},\"z\":{info.unityRotation.z},\"w\":{info.unityRotation.w}}},"
-                + $"\"priorPosition\":{{\"x\":{info.priorPosition.x},\"y\":{info.priorPosition.y},\"z\":{info.priorPosition.z}}},"
-                + $"\"priorRotation\":{{\"x\":{info.priorRotation.x},\"y\":{info.priorRotation.y},\"z\":{info.priorRotation.z},\"w\":{info.priorRotation.w}}},"
+                + $"\"principalPoint\":{{\"x\":{F(info.principalPoint.x)},\"y\":{F(info.principalPoint.y)}}},"
+                + $"\"unityPosition\":{{\"x\":{F(info.unityPosition.x)},\"y\":{F(info.unityPosition.y)},\"z\":{F(info.unityPosition.z)}}},"
+                + $"\"unityRotation\":{{\"x\":{F(info.unityRotation.x)},\"y\":{F(info.unityRotation.y)},\"z\":{F(info.unityRotation.z)},\"w\":{F(info.unityRotation.w)}}},"
+                + $"\"priorPosition\":{{\"x\":{F(info.priorPosition.x)},\"y\":{F(info.priorPosition.y)},\"z\":{F(info.priorPosition.z)}}},"
+                + $"\"priorRotation\":{{\"x\":{F(info.priorRotation.x)},\"y\":{F(info.priorRotation.y)},\"z\":{F(info.priorRotation.z)},\"w\":{F(info.priorRotation.w)}}},"
                 + $"\"deviceOrientation\":{(int)info.deviceOrientation},"
-                + $"\"gnss\":{{\"isValid\":{(info.gnss?.isValid == true ? "true" : "false")},\"latitude\":{info.gnss?.latitude ?? 0},\"longitude\":{info.gnss?.longitude ?? 0}}},"
-                + $"\"compass\":{{\"isValid\":{(info.compass?.isValid == true ? "true" : "false")},\"trueHeading\":{info.compass?.trueHeading ?? 0}}},"
+                + $"\"gnss\":{{\"isValid\":{(info.gnss?.isValid == true ? "true" : "false")},\"latitude\":{F(info.gnss?.latitude ?? 0)},\"longitude\":{F(info.gnss?.longitude ?? 0)}}},"
+                + $"\"compass\":{{\"isValid\":{(info.compass?.isValid == true ? "true" : "false")},\"trueHeading\":{F(info.compass?.trueHeading ?? 0)}}},"
                 + $"\"trackingState\":{info.trackingState}"
                 + "}";
         }

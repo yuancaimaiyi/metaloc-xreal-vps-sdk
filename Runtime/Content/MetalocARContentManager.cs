@@ -88,7 +88,11 @@ namespace Metaloc.VPS
         private void OnDestroy()
         {
             if (m_Manager != null) m_Manager.OnLocalized -= OnLocalized;
+            foreach (var go in m_Objects.Values)
+                if (go != null) Destroy(go);
+            m_Objects.Clear();
             UnloadAllBundles();
+            if (m_WorldRoot != null) Destroy(m_WorldRoot.gameObject);
         }
 
         // ── Pre-load ──────────────────────────────────────────────────────────
@@ -184,19 +188,24 @@ namespace Metaloc.VPS
 
         private IEnumerator SmoothMove(Transform t, Vector3 targetPos, Quaternion targetRot, float duration)
         {
+            if (t == null) yield break;
             Vector3 startPos = t.position;
             Quaternion startRot = t.rotation;
             float elapsed = 0f;
             while (elapsed < duration)
             {
+                if (t == null) yield break;
                 float p = elapsed / duration;
                 t.position = Vector3.Lerp(startPos, targetPos, p);
                 t.rotation = Quaternion.Slerp(startRot, targetRot, p);
                 elapsed += Time.deltaTime;
                 yield return null;
             }
-            t.position = targetPos;
-            t.rotation = targetRot;
+            if (t != null)
+            {
+                t.position = targetPos;
+                t.rotation = targetRot;
+            }
         }
 
         private void UnloadAllBundles()
