@@ -1,6 +1,20 @@
 # Metaloc VPS SDK 接入指南
 
-**版本 1.0.0 | 适用设备：XREAL Ultra / XREAL One**
+**版本 1.0.1 | 适用设备：XREAL Ultra / XREAL One**
+
+---
+
+> ## ⚠️ 前置依赖（必读）
+>
+> 本 SDK **不包含** XREAL 官方 SDK，必须先手动安装：
+>
+> 1. **XREAL XR Plugin 2.0.0+** — 从 [XREAL 开发者中心](https://developer.xreal.com) 下载安装
+> 2. **XREAL Enterprise License** — 灰度相机是企业 API，无 License 相机静默失败（详见 1d 节）
+> 3. **Unity Input System 1.4+** — Package Manager 安装
+>
+> 未安装 XREAL SDK 就导入本包会看到 asmdef 引用报错（`Unity.XR.XREAL` not found），**这不是 SDK 的 bug**，按下面第一步装完 XREAL 即可。
+>
+> 一键搭建示例：菜单 **Metaloc → Create Sample Setup In Scene**，自动创建带 `MetalocVPSManager` + `MetalocARContentManager` 的 GameObject。
 
 ---
 

@@ -1,6 +1,6 @@
 {
   "name": "cn.metaloc.xreal.vps",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "displayName": "Metaloc XREAL VPS SDK",
   "description": "Visual Positioning System (VPS) SDK for XREAL AR glasses. Provides 6DoF localization using Metaloc's cloud VPS service, with Posidon multi-frame fusion.",
   "unity": "2021.3",
