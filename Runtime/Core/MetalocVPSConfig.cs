@@ -44,9 +44,13 @@ namespace Metaloc.VPS
         [Tooltip("Maximum time (seconds) between successful VPS updates during hot-start")]
         public float maxTimeBetweenVPS = 60f;
 
-        [Tooltip("Minimum score to accept a 4DoF VPS result (6DoF skips this filter)")]
+        [Tooltip("Minimum score to accept a 4DoF VPS result during hot start (6DoF skips this filter)")]
         [Range(0f, 1f)]
         public float scoreThreshold = 0.75f;
+
+        [Tooltip("Minimum score to accept the FIRST 4DoF VPS result (cold start). Set higher than scoreThreshold because Posidon cannot cross-validate the first observation.")]
+        [Range(0f, 1f)]
+        public float coldStartScoreThreshold = 0.85f;
 
         [Header("Camera")]
         [Tooltip("Which grayscale camera to use for VPS image capture")]

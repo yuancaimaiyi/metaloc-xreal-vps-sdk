@@ -299,11 +299,17 @@ namespace Metaloc.VPS
             }
 
             // 4DoF result: apply score threshold; 6DoF result: trust Posidon to filter
-            if (!m_LastWas6DoF && data.score < m_Config.scoreThreshold)
+            // Cold start uses a stricter gate because Posidon has no prior observation to cross-validate the first fix.
+            if (!m_LastWas6DoF)
             {
-                Debug.LogWarning($"[MetalocVPSManager] Score {data.score:F3} below threshold {m_Config.scoreThreshold}");
-                OnLocalizationFailed?.Invoke($"Low score: {data.score:F3}");
-                return;
+                float gate = m_IsLocalized ? m_Config.scoreThreshold : m_Config.coldStartScoreThreshold;
+                if (data.score < gate)
+                {
+                    string phase = m_IsLocalized ? "hot" : "cold";
+                    Debug.LogWarning($"[MetalocVPSManager] Score {data.score:F3} below {phase}-start gate {gate}");
+                    OnLocalizationFailed?.Invoke($"Low score: {data.score:F3}");
+                    return;
+                }
             }
 
             // Convert server result (right-hand) to Unity left-hand
