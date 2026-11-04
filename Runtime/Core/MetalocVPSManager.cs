@@ -191,7 +191,13 @@ namespace Metaloc.VPS
             {
                 m_AccumulatedDisplacement = m_Config.displacementTriggerThreshold;
                 m_LastVPSSuccessTime = -999f;
-                Debug.Log("[MetalocVPSManager] SLAM recovered → forcing re-localization");
+                Debug.Log($"[MetalocVPSManager] SLAM recovered (Tracking) → forcing 4DoF re-localization (mode={ModeTag()})");
+            }
+            // Log SLAM state transitions (Tracking ↔ Limited) so Logcat shows when 6DoF fallback kicks in
+            if (ts != m_PrevTrackingState)
+            {
+                Debug.Log($"[MetalocVPSManager] SLAM TrackingState: {m_PrevTrackingState} → {ts}" +
+                          (ts == TrackingState.Limited ? "  (next requests will fall back to 6DoF)" : ""));
             }
             m_PrevTrackingState = ts;
 
@@ -278,6 +284,9 @@ namespace Metaloc.VPS
             // Limited SLAM → 6DoF (identity priorRotation, server falls back to classic PnP)
             bool use6DoF = (GetTrackingState() == TrackingState.Limited);
             m_LastWas6DoF = use6DoF;
+            if (use6DoF)
+                Debug.Log("[MetalocVPSManager] SLAM Limited → identity priorRotation (server will fall back to standard PnP)");
+            Debug.Log($"[MetalocVPSManager] Firing VPS request (mode=Mono/{(use6DoF?"6DoF":"4DoF")}, phase={(m_IsLocalized?"hot":"cold")})");
 
             VPSRequestInfo info = new VPSRequestInfo
             {
@@ -341,6 +350,9 @@ namespace Metaloc.VPS
             // Limited SLAM → 6DoF (identity priorRotation, server fallback to generalized-stereo GP3P)
             bool use6DoF = (GetTrackingState() == TrackingState.Limited);
             m_LastWas6DoF = use6DoF;
+            if (use6DoF)
+                Debug.Log("[MetalocVPSManager] SLAM Limited → identity priorRotation (server will fall back to generalized-stereo GP3P)");
+            Debug.Log($"[MetalocVPSManager] Firing stereo VPS request (mode=Stereo/{(use6DoF?"6DoF":"4DoF")}, phase={(m_IsLocalized?"hot":"cold")}, body=Left)");
 
             StereoVPSRequestInfo info = new StereoVPSRequestInfo
             {
@@ -379,10 +391,12 @@ namespace Metaloc.VPS
             if (data == null || data.causeValue != VPSCauseValue.Success)
             {
                 string reason = data?.description ?? "unknown";
-                Debug.LogWarning($"[MetalocVPSManager] VPS rejected: {reason}");
+                Debug.LogWarning($"[MetalocVPSManager] VPS rejected by server: {reason} (mode={ModeTag()})");
                 OnLocalizationFailed?.Invoke(reason);
                 return;
             }
+
+            Debug.Log($"[MetalocVPSManager] VPS response accepted: score={data.score:F3} mode={ModeTag()}");
 
             // Since 2026-11-04 server returns 4-factor confidence for all four paths (gravity-single /
             // gravity-stereo / standard-single / generalized-stereo), so score has physical meaning in every
@@ -398,8 +412,7 @@ namespace Metaloc.VPS
                 if (data.score < gate)
                 {
                     string phase = m_IsLocalized ? "hot" : "cold";
-                    string modeTag = (m_Config.useStereo ? "Stereo/" : "Mono/") + (m_LastWas6DoF ? "6DoF" : "4DoF");
-                    Debug.LogWarning($"[MetalocVPSManager] Score {data.score:F3} below {phase}-start gate {gate} ({modeTag})");
+                    Debug.LogWarning($"[MetalocVPSManager] Score {data.score:F3} below {phase}-start gate {gate} (mode={ModeTag()})");
                     OnLocalizationFailed?.Invoke($"Low score: {data.score:F3}");
                     return;
                 }
@@ -449,10 +462,12 @@ namespace Metaloc.VPS
             {
                 m_IsLocalized = wasLocalized;
                 m_VpsToUnityMatrix = m_PrevVpsToUnityMatrix;
-                Debug.LogWarning("[MetalocVPSManager] Posidon rejected → state rolled back");
+                Debug.LogWarning($"[MetalocVPSManager] Posidon rejected (outlier) → state rolled back (mode={ModeTag()})");
                 OnLocalizationFailed?.Invoke("Posidon rejected measurement");
                 return;
             }
+
+            Debug.Log($"[MetalocVPSManager] Localized OK: mode={ModeTag()} score={data.score:F3} phase={(wasLocalized?"hot":"cold")}");
 
             OnLocalized?.Invoke(new VPSLocalizationResult
             {
@@ -478,7 +493,7 @@ namespace Metaloc.VPS
             m_DisplacementTrackingActive = false;
             m_StableGyroFrames = 0;
             m_LastVPSSuccessTime = Time.time;
-            Debug.Log($"[MetalocVPSManager] Posidon accepted fusion, t={vpsToUnity.GetColumn(3)}");
+            Debug.Log($"[MetalocVPSManager] Posidon accepted fusion (mode={ModeTag()}), t={vpsToUnity.GetColumn(3)}");
         }
 
         private void HandleFusionRejected()
@@ -487,6 +502,13 @@ namespace Metaloc.VPS
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Short tag for the current VPS path, used across log lines for grep-friendly diagnostics.
+        /// Format: `Stereo/4DoF` | `Stereo/6DoF` | `Mono/4DoF` | `Mono/6DoF`.
+        /// </summary>
+        private string ModeTag()
+            => (m_Config.useStereo ? "Stereo/" : "Mono/") + (m_LastWas6DoF ? "6DoF" : "4DoF");
 
         private static TrackingState GetTrackingState()
         {
