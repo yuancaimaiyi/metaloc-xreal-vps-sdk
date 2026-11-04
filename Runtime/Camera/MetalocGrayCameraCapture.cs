@@ -154,8 +154,15 @@ namespace Metaloc.VPS
             HasStereoCalibration = hasL && hasR;
             if (HasStereoCalibration)
             {
-                Debug.Log($"[MetalocGrayCameraCapture] Stereo L: {sizeL.x}x{sizeL.y} fx={flL.x:F2} camToGlasses.pos={cgL.position}");
-                Debug.Log($"[MetalocGrayCameraCapture] Stereo R: {sizeR.x}x{sizeR.y} fx={flR.x:F2} camToGlasses.pos={cgR.position}");
+                Debug.Log($"[MetalocGrayCameraCapture] Stereo L: res=({sizeL.x},{sizeL.y}) f=({flL.x:F2},{flL.y:F2}) pp=({ppL.x:F2},{ppL.y:F2}) camToGlasses.pos={cgL.position} rot={cgL.rotation}");
+                Debug.Log($"[MetalocGrayCameraCapture] Stereo R: res=({sizeR.x},{sizeR.y}) f=({flR.x:F2},{flR.y:F2}) pp=({ppR.x:F2},{ppR.y:F2}) camToGlasses.pos={cgR.position} rot={cgR.rotation}");
+                // Derived rig extrinsic in Unity left-hand frame. Semantics:
+                //   T_rightcam_leftcam · pt_leftcam = pt_rightcam  (left -> right frame transform)
+                // Expect .x ≈ -(baseline) because frame-to-frame translation is the negation of
+                // the optical-center offset (right eye sits at +baseline in left eye's frame).
+                Pose t_right_left_LH = MetalocCoordUtils.MultiplyPose(
+                    MetalocCoordUtils.InversePose(cgR), cgL);
+                Debug.Log($"[MetalocGrayCameraCapture] Stereo T_right_left (LH) pos={t_right_left_LH.position} rot={t_right_left_LH.rotation}");
             }
             else
             {
