@@ -519,4 +519,58 @@ m_ContentManager.ReloadScene();
 - XREAL XR Plugin 版本
 - Console 错误截图或完整日志
 
-*SDK 版本 1.0.0 | 2026*
+*SDK 版本 1.1.0 | 2026*
+
+---
+
+## 附录 A:启用双目(Stereo)定位模式(1.1.0+)
+
+### 适用场景
+双目同时送左右目图像到服务端 `/vps/stereo`,服务端用 **gravity + rig refine**(或 VIO Limited 时 fallback 到 **GP3P + 广义 refine**)解算 6DoF。body = 左目,返回的 pose 是左目在 VPS 世界系的位姿,SDK 自动用左目 CameraToGlasses 变换回 glasses。
+
+单目退化场景(高尔夫球道、室内走廊、低纹理)可以通过双目改善(基线 + FOV 互补 + 双帧观测)。
+
+### 服务端前置
+服务端 `/vps/stereo` 已上线(2026-11 封版)。四条 pose refine 通路现在都输出同款 4 因子 confidence,客户端 score 过滤不区分 mono/stereo/4DoF/6DoF。
+
+### 启用步骤
+
+**1. Inspector 勾选 Use Stereo**
+
+打开你的 `MetalocVPSConfig` 资产:
+- `Camera → Use Stereo` 勾上
+- `Server Endpoints → Stereo Api Url` 保持默认 `https://vps.zybervision.cn/wayzoom/v1.2/vps/stereo`
+- `Localization Triggers → Stereo Cold Start Score Threshold` 保持默认 **0.75**(比单目 `Cold Start Score Threshold` 0.80 松,双目置信度天然更高)
+
+**2. 运行时动态切换(可选)**
+
+```csharp
+m_VpsManager.SetUseStereo(true);   // 切到双目
+m_VpsManager.SetUseStereo(false);  // 回单目
+```
+
+**3. 单目/双目共存**
+
+`Use Stereo = false` 时 SDK 行为和 1.0.x 完全一致,走 `/vps/single`。无需改任何业务代码。
+
+### 日志关键字
+
+- 启动: `[MetalocGrayCameraCapture] Stereo L: 480x640 fx=... camToGlasses.pos=...`
+- 请求前: `[MetalocHttpClient] POST https://.../vps/stereo`
+- 冷启动被拒: `Score 0.72 below cold-start gate 0.75 (Stereo/4DoF)`
+- 成功: 走 `OnLocalized` 事件,`rawResponse.score` 字段有效
+
+### 性能参考
+- **冷启动阈值**:`stereoColdStartScoreThreshold` 默认 **0.75**,比单目 0.80 松一档;Posidon 进入热启动后两条路径共用 `scoreThreshold = 0.75`
+- **请求耗时**:双目约为单目 1.5-2×(左右目并行特征提取,串行 pose refine)
+
+### 常见问题
+
+**Q: 左目特征点一直是 0**
+A: 确认 SDK 包 `com.xreal.xr.enterprise` 装正确;本 SDK 1.1.0 已把 `UndistortImage` cameraID 从 `0/1` 修为官方约定 `Left=1 / Right=2`(1.0.x 是错的,会导致左目全黑)。
+
+**Q: Inspector 勾了 Use Stereo 但请求还是走 /vps/single**
+A: 检查 `stereoApiUrl` 不是空串。
+
+**Q: 冷启动完全定位不上**
+A: 看 Logcat 的 `Score ... below gate` 日志,如果 score 普遍在 0.5-0.6 之间,说明场景特征不足,考虑临时降 `stereoColdStartScoreThreshold` 到 0.65(但有边缘错锁风险)。

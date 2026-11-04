@@ -16,6 +16,9 @@ namespace Metaloc.VPS
         [Tooltip("Full URL for the QR-code assisted VPS endpoint")]
         public string qrcodeApiUrl = "https://vps.zybervision.cn/wayzoom/v1.2/vps/single/qrcode";
 
+        [Tooltip("Full URL for the stereo (dual-eye, gravity + rig) VPS endpoint. Used only when useStereo = true.")]
+        public string stereoApiUrl = "https://vps.zybervision.cn/wayzoom/v1.2/vps/stereo";
+
         [Header("Authentication")]
         [Tooltip("Bearer token for Authorization header")]
         public string authToken = "Bearer <your_token_here>";
@@ -44,16 +47,23 @@ namespace Metaloc.VPS
         [Tooltip("Maximum time (seconds) between successful VPS updates during hot-start")]
         public float maxTimeBetweenVPS = 60f;
 
-        [Tooltip("Minimum score to accept a 4DoF VPS result during hot start (6DoF skips this filter)")]
+        [Tooltip("Minimum score to accept a VPS result during hot start. Applies to all four server paths (4DoF gravity / 6DoF no-prior, mono / stereo) since server returns unified 4-factor confidence as of 2026-11-04.")]
         [Range(0f, 1f)]
         public float scoreThreshold = 0.75f;
 
-        [Tooltip("Minimum score to accept the FIRST 4DoF VPS result (cold start). Set higher than scoreThreshold because Posidon cannot cross-validate the first observation.")]
+        [Tooltip("Minimum score to accept the FIRST mono VPS result (cold start). Stricter than scoreThreshold because Posidon cannot cross-validate the first observation. Used for mono path only — stereo uses stereoColdStartScoreThreshold.")]
         [Range(0f, 1f)]
-        public float coldStartScoreThreshold = 0.85f;
+        public float coldStartScoreThreshold = 0.80f;
+
+        [Tooltip("Minimum score to accept the FIRST stereo VPS result (cold start). Looser than mono because stereo baseline + FOV complementarity makes confidence naturally higher.")]
+        [Range(0f, 1f)]
+        public float stereoColdStartScoreThreshold = 0.75f;
 
         [Header("Camera")]
-        [Tooltip("Which grayscale camera to use for VPS image capture")]
+        [Tooltip("Enable stereo (dual-eye, gravity + rig) VPS mode. When true, Localize requests both eyes to /vps/stereo. Target eye intrinsics is ignored — body is always the left eye.")]
+        public bool useStereo = false;
+
+        [Tooltip("Which grayscale camera to use for mono VPS image capture. Ignored when useStereo = true.")]
         public TargetEye targetEye = TargetEye.Right;
 
         [Tooltip("Apply lens undistortion before sending the image to the server")]

@@ -54,6 +54,18 @@ namespace Metaloc.VPS
             m_Config.mapName = mapName;
         }
 
+        /// <summary>
+        /// Toggle stereo mode at runtime. Only takes effect on subsequent VPS requests.
+        /// Note: stereo calibration is queried lazily on first stereo request; may skip first fire if not ready.
+        /// </summary>
+        public void SetUseStereo(bool useStereo)
+        {
+            if (m_Config == null) return;
+            if (m_Config.useStereo == useStereo) return;
+            m_Config.useStereo = useStereo;
+            Debug.Log($"[MetalocVPSManager] Stereo mode: {useStereo}");
+        }
+
         /// <summary>Begin polling for VPS requests. Call after scene is fully loaded.</summary>
         public void StartLocalization()
         {
@@ -129,8 +141,8 @@ namespace Metaloc.VPS
 
         private void Start()
         {
-            // Gray camera
-            m_Camera = new MetalocGrayCameraCapture(m_Config.targetEye, m_Config.enableUndistortion);
+            // Gray camera. When useStereo=true, m_Camera queries both eyes' intrinsics/extrinsics on startup.
+            m_Camera = new MetalocGrayCameraCapture(m_Config.targetEye, m_Config.enableUndistortion, m_Config.useStereo);
             m_Camera.Initialize();
 
             // Posidon fusion
@@ -233,6 +245,12 @@ namespace Metaloc.VPS
 
         private IEnumerator BuildAndSendRequest()
         {
+            if (m_Config.useStereo)
+            {
+                yield return BuildAndSendStereoRequest();
+                yield break;
+            }
+
             // Snapshot timestamp before GPU work to align VIO query to the actual image moment
             long imgTs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             byte[] jpeg = m_Camera.CaptureJPEG();
@@ -281,6 +299,74 @@ namespace Metaloc.VPS
             m_Http.SendVPSRequest(info, jpeg, OnVPSSuccess, OnVPSError);
         }
 
+        // Stereo path: body = left eye, send both eyes to /vps/stereo.
+        private IEnumerator BuildAndSendStereoRequest()
+        {
+            if (!m_Camera.HasStereoCalibration)
+            {
+                Debug.LogWarning("[MetalocVPSManager] Stereo calibration not ready — skipping request");
+                yield break;
+            }
+
+            long imgTs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            byte[] jpegL = m_Camera.CaptureEyeJPEG(TargetEye.Left);
+            byte[] jpegR = m_Camera.CaptureEyeJPEG(TargetEye.Right);
+            if (jpegL == null || jpegR == null)
+            {
+                Debug.LogWarning("[MetalocVPSManager] CaptureEyeJPEG returned null for one or both eyes");
+                yield break;
+            }
+
+            if (!MetalocHeadPoseHelper.GetPoseAtTime((ulong)imgTs, out Vector3 glassesPos, out Quaternion glassesRot))
+            {
+                Debug.LogWarning("[MetalocVPSManager] VIO query failed — skipping stereo request");
+                yield break;
+            }
+            m_VioSnapshotAtRequest = new Pose(glassesPos, glassesRot);
+
+            // Body = left eye: left cam pose = glasses * CameraToGlasses_Left
+            Vector3 leftCamPos = glassesPos + glassesRot * m_Camera.CameraToGlasses_Left.position;
+            Quaternion leftCamRot = glassesRot * m_Camera.CameraToGlasses_Left.rotation;
+            Pose leftCamPose_LH = new Pose(leftCamPos, leftCamRot);
+            Pose leftCamPose_RH = MetalocCoordUtils.LeftHandToRightHand(leftCamPose_LH);
+
+            // T_rightcam_leftcam = inv(CameraToGlasses_Right) * CameraToGlasses_Left (left-hand), then convert to RH.
+            // Semantics: pt_rightcam = T_rightcam_leftcam · pt_leftcam (left-to-right frame transform).
+            // For ~62mm baseline, position.x ≈ -0.062 (frame-to-frame translation is the negation of optical-center offset).
+            Pose t_right_left_LH = MetalocCoordUtils.MultiplyPose(
+                MetalocCoordUtils.InversePose(m_Camera.CameraToGlasses_Right),
+                m_Camera.CameraToGlasses_Left);
+            Pose t_right_left_RH = MetalocCoordUtils.LeftHandToRightHand(t_right_left_LH);
+
+            // Limited SLAM → 6DoF (identity priorRotation, server fallback to generalized-stereo GP3P)
+            bool use6DoF = (GetTrackingState() == TrackingState.Limited);
+            m_LastWas6DoF = use6DoF;
+
+            StereoVPSRequestInfo info = new StereoVPSRequestInfo
+            {
+                timestamp = imgTs,
+                focalLength_left     = m_Camera.FocalLength_Left,
+                resolution_left      = m_Camera.Resolution_Left,
+                principalPoint_left  = m_Camera.PrincipalPoint_Left,
+                focalLength_right    = m_Camera.FocalLength_Right,
+                resolution_right     = m_Camera.Resolution_Right,
+                principalPoint_right = m_Camera.PrincipalPoint_Right,
+                unityPosition        = leftCamPos,
+                unityRotation        = leftCamRot,
+                priorPosition        = leftCamPose_RH.position,
+                priorRotation        = use6DoF ? new Quaternion(0f, 0f, 0f, 1f) : leftCamPose_RH.rotation,
+                rightToLeftPosition  = t_right_left_RH.position,
+                rightToLeftRotation  = t_right_left_RH.rotation,
+                deviceOrientation    = Input.deviceOrientation,
+                gnss                 = BuildGnssData(),
+                compass              = BuildCompassData(),
+                trackingState        = m_IsLocalized ? 1 : 0
+            };
+
+            m_RequestInFlight = true;
+            m_Http.SendStereoVPSRequest(info, jpegL, jpegR, OnVPSSuccess, OnVPSError);
+        }
+
         // ── Response handling ─────────────────────────────────────────────────
 
         private void OnVPSSuccess(string responseJson)
@@ -298,15 +384,22 @@ namespace Metaloc.VPS
                 return;
             }
 
-            // 4DoF result: apply score threshold; 6DoF result: trust Posidon to filter
-            // Cold start uses a stricter gate because Posidon has no prior observation to cross-validate the first fix.
-            if (!m_LastWas6DoF)
+            // Since 2026-11-04 server returns 4-factor confidence for all four paths (gravity-single /
+            // gravity-stereo / standard-single / generalized-stereo), so score has physical meaning in every
+            // case — no longer skip gating for 6DoF fallback.
+            // Cold start uses a stricter gate because Posidon has no prior observation to cross-validate the
+            // first fix. Stereo uses a looser gate than mono (stereo baseline + FOV make confidence naturally higher).
             {
-                float gate = m_IsLocalized ? m_Config.scoreThreshold : m_Config.coldStartScoreThreshold;
+                float gate;
+                if (m_IsLocalized)
+                    gate = m_Config.scoreThreshold;
+                else
+                    gate = m_Config.useStereo ? m_Config.stereoColdStartScoreThreshold : m_Config.coldStartScoreThreshold;
                 if (data.score < gate)
                 {
                     string phase = m_IsLocalized ? "hot" : "cold";
-                    Debug.LogWarning($"[MetalocVPSManager] Score {data.score:F3} below {phase}-start gate {gate}");
+                    string modeTag = (m_Config.useStereo ? "Stereo/" : "Mono/") + (m_LastWas6DoF ? "6DoF" : "4DoF");
+                    Debug.LogWarning($"[MetalocVPSManager] Score {data.score:F3} below {phase}-start gate {gate} ({modeTag})");
                     OnLocalizationFailed?.Invoke($"Low score: {data.score:F3}");
                     return;
                 }
@@ -315,11 +408,25 @@ namespace Metaloc.VPS
             // Convert server result (right-hand) to Unity left-hand
             Pose cameraInVps_LH = MetalocCoordUtils.RightHandToLeftHand(new Pose(data.translation, data.rotation));
 
-            // Apply inverse camera→glasses extrinsic to get glasses pose in VPS space
+            // Apply inverse camera→glasses extrinsic to get glasses pose in VPS space.
+            // Stereo: server returns body=left-eye world pose, use CameraToGlasses_Left.
+            // Mono: use the single-eye CameraToGlasses bound at startup (m_Config.targetEye).
             Pose glassesInVps_LH = cameraInVps_LH;
-            if (m_Camera.HasCameraToGlasses)
+            Pose camToGlassesForInverse;
+            bool hasExtrinsic;
+            if (m_Config.useStereo && m_Camera.HasStereoCalibration)
             {
-                Pose glassesToCamera = MetalocCoordUtils.InversePose(m_Camera.CameraToGlasses);
+                camToGlassesForInverse = m_Camera.CameraToGlasses_Left;
+                hasExtrinsic = true;
+            }
+            else
+            {
+                camToGlassesForInverse = m_Camera.CameraToGlasses;
+                hasExtrinsic = m_Camera.HasCameraToGlasses;
+            }
+            if (hasExtrinsic)
+            {
+                Pose glassesToCamera = MetalocCoordUtils.InversePose(camToGlassesForInverse);
                 glassesInVps_LH = MetalocCoordUtils.MultiplyPose(cameraInVps_LH, glassesToCamera);
             }
 

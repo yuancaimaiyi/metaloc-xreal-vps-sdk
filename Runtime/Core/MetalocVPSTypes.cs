@@ -40,6 +40,44 @@ namespace Metaloc.VPS
         public int trackingState;
     }
 
+    /// <summary>All data fields sent per stereo VPS HTTP request (body = left eye).</summary>
+    public class StereoVPSRequestInfo
+    {
+        public long timestamp;
+
+        // Left eye intrinsics (body frame)
+        public Vector2 focalLength_left;
+        public Vector2Int resolution_left;
+        public Vector2 principalPoint_left;
+
+        // Right eye intrinsics
+        public Vector2 focalLength_right;
+        public Vector2Int resolution_right;
+        public Vector2 principalPoint_right;
+
+        /// <summary>Unity-space pose (left-hand). Used for debug/logging on server side.</summary>
+        public Vector3 unityPosition;
+        public Quaternion unityRotation;
+
+        /// <summary>Left eye VPS prior pose (right-hand). priorRotation = identity when VIO Limited.</summary>
+        public Vector3 priorPosition;
+        public Quaternion priorRotation;
+
+        /// <summary>
+        /// Stereo rig extrinsic: T_rightcam_leftcam in right-hand frame.
+        /// Semantics: pt_rightcam = T_rightcam_leftcam · pt_leftcam (left-to-right frame transform).
+        /// For ~62mm baseline, rightToLeftPosition.x ≈ -0.062 (negative, counter-intuitive).
+        /// </summary>
+        public Vector3 rightToLeftPosition;
+        public Quaternion rightToLeftRotation;
+
+        public DeviceOrientation deviceOrientation;
+        public VPSGnssData gnss;
+        public VPSCompassData compass;
+        /// <summary>0 = cold start, 1 = hot start</summary>
+        public int trackingState;
+    }
+
     public enum VPSCauseValue
     {
         Success = 0,
